@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StoryFrame Admin</title>
+    <style>
+        :root {
+            --bg: #121212; --card: #1e1e1e; --primary: #bb86fc; --text: #e0e0e0;
+        }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 20px; }
+        .container { max-width: 600px; margin: 0 auto; }
+        .card { background: var(--card); padding: 20px; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+        h1, h2 { color: var(--primary); margin-top: 0; }
+        input, select, button { width: 100%; padding: 10px; margin: 10px 0; border-radius: 6px; border: 1px solid #333; background: #2a2a2a; color: white; box-sizing: border-box; }
+        button { background: var(--primary); color: #000; font-weight: bold; cursor: pointer; border: none; transition: 0.3s; }
+        button:hover { opacity: 0.8; }
+        button.danger { background: #cf6679; color: white; }
+        .upload-area { border: 2px dashed #444; padding: 30px; text-align: center; border-radius: 8px; cursor: pointer; }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🖼️ StoryFrame Control</h1>
+
+        <div class="card">
+            <h2>Налаштування відтворення</h2>
+            <label>Активний трек:</label>
+            <select id="trackList">
+                <option value="/1.mp3">Завантаження...</option>
+            </select>
+            
+            <label>
+                <input type="checkbox" id="playlistMode" style="width:auto; margin-right: 10px;">
+                Режим "Плейлист" (грати наступний при кожному проході)
+            </label>
+            <button onclick="saveSettings()">Зберегти налаштування</button>
+        </div>
+
+        <div class="card">
+            <h2>Завантажити MP3</h2>
+            <form id="uploadForm" enctype="multipart/form-data">
+                <input type="file" name="file" id="fileInput" accept=".mp3" required>
+                <button type="button" onclick="uploadFile()">Завантажити на SD-карту</button>
+            </form>
+            <p id="uploadStatus"></p>
+        </div>
+
+        <div class="card">
+            <h2>Мережа (Wi-Fi)</h2>
+            <input type="text" id="ssid" placeholder="Назва Wi-Fi мережі (SSID)">
+            <input type="password" id="wifipass" placeholder="Пароль від Wi-Fi">
+            <button onclick="saveNetwork()">Підключити до Wi-Fi</button>
+        </div>
+
+        <div class="card" style="border: 1px solid #cf6679;">
+            <h2 style="color: #cf6679;">Небезпечна зона</h2>
+            <button class="danger" onclick="factoryReset()">Скинути до заводських налаштувань</button>
+        </div>
+    </div>
+
+    <script>
+        // Завантаження списку файлів при старті
+        async function loadFiles() {
+            try {
+                const res = await fetch('/api/files');
+                const data = await res.json();
+                const select = document.getElementById('trackList');
+                select.innerHTML = '';
+                data.files.forEach(f => {
+                    select.innerHTML += `<option value="${f}">${f}</option>`;
+                });
+            } catch (e) {
+                console.error("Помилка завантаження списку файлів. Перевірте SD-карту.");
+            }
+        }
+
+        async function saveSettings() {
+            const track = document.getElementById('trackList').value;
+            const playlist = document.getElementById('playlistMode').checked ? 1 : 0;
+            const formData = new URLSearchParams();
+            formData.append('track', track);
+            formData.append('playlist', playlist);
+            
+            await fetch('/api/settings', { method: 'POST', body: formData });
+            alert('Налаштування збережено!');
+        }
+
+        async function saveNetwork() {
+            const ssid = document.getElementById('ssid').value;
+            const pass = document.getElementById('wifipass').value;
+            const formData = new URLSearchParams();
+            formData.append('ssid', ssid);
+            formData.append('wifipass', pass);
+            
+            await fetch('/api/settings', { method: 'POST', body: formData });
+            alert('Wi-Fi налаштовано. Пристрій перезавантажиться. Підключіться до вашої домашньої мережі.');
+            fetch('/api/reset', { method: 'POST' }); // М'яке перезавантаження для застосування Wi-Fi
+        }
+
+        async function uploadFile() {
+            const fileInput = document.getElementById('fileInput');
+            if (fileInput.files.length === 0) return alert('Оберіть файл');
+            
+            const formData = new FormData();
+            formData.append("file", fileInput.files[0]);
+            
+            document.getElementById('uploadStatus').innerText = "Завантаження... Будь ласка, зачекайте.";
+            
+            try {
+                const res = await fetch('/api/upload', { method: 'POST', body: formData });
+                if(res.ok) {
+                    document.getElementById('uploadStatus').innerText = "Успішно завантажено!";
+                    loadFiles(); // Оновлюємо список
+                } else {
+                    document.getElementById('uploadStatus').innerText = "Помилка завантаження.";
+                }
+            } catch (e) {
+                document.getElementById('uploadStatus').innerText = "Помилка з'єднання.";
+            }
+        }
+
+        async function factoryReset() {
+            if(confirm("Ви впевнені? Це видалить налаштування Wi-Fi та паролі.")) {
+                await fetch('/api/reset', { method: 'POST' });
+                alert('Пристрій перезавантажується у режим налаштування (AP).');
+            }
+        }
+
+        // Ініціалізація
+        loadFiles();
+    </script>
+</body>
+</html>
